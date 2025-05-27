@@ -1,8 +1,8 @@
-const videoElement = document.getElementById('cam_input'); // Đã sửa lại đúng ID
-const canvasElement = document.getElementById('canvas_output');
-const canvasRoi = document.getElementById('canvas_roi');
-const canvasCtx = canvasElement.getContext('2d');
-const roiCtx = canvasRoi.getContext('2d');
+const videoElement = document.getElementById("cam_input"); // Đã sửa lại đúng ID
+const canvasElement = document.getElementById("canvas_output");
+const canvasRoi = document.getElementById("canvas_roi");
+const canvasCtx = canvasElement.getContext("2d");
+const roiCtx = canvasRoi.getContext("2d");
 
 const drawingUtils = window;
 const emotions = ["Angry", "Happy", "Sad", "Surprise"];
@@ -10,7 +10,8 @@ let tfliteModel;
 
 // Bật camera
 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-  navigator.mediaDevices.getUserMedia({ video: true })
+  navigator.mediaDevices
+    .getUserMedia({ video: true })
     .then(function (stream) {
       videoElement.srcObject = stream;
       videoElement.play(); // Đảm bảo phát stream
@@ -21,7 +22,6 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
 } else {
   alert("Trình duyệt của bạn không hỗ trợ camera.");
 }
-
 // Load model
 async function start() {
   try {
@@ -38,65 +38,88 @@ async function start() {
 function onOpenCvReady() {
   start(); // Load model and then call openCvReady inside start()
 }
-
-if (typeof cv === 'undefined') {
+if (typeof cv === "undefined") {
   // OpenCV not loaded yet, wait for it
   let checkCV = setInterval(() => {
-    if (typeof cv !== 'undefined' && cv['onRuntimeInitialized']) {
+    console.log("typeof cv", typeof cv);
+    if (typeof cv !== "undefined" && cv["onRuntimeInitialized"]) {
       clearInterval(checkCV);
-      cv['onRuntimeInitialized'] = onOpenCvReady;
+      cv["onRuntimeInitialized"] = onOpenCvReady;
     }
   }, 100);
 } else {
   // OpenCV already loaded
-  cv['onRuntimeInitialized'] = onOpenCvReady;
+  cv["onRuntimeInitialized"] = onOpenCvReady;
+  cv.onRuntimeInitialized();
 }
 
 function openCvReady() {
-  cv['onRuntimeInitialized'] = () => {
-
+  cv["onRuntimeInitialized"] = () => {
     function onResults(results) {
       try {
         canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.drawImage(
+          results.image,
+          0,
+          0,
+          canvasElement.width,
+          canvasElement.height
+        );
 
         if (results.detections.length > 0) {
           const box = results.detections[0].boundingBox;
-          const x = box.xCenter * canvasElement.width - (box.width * canvasElement.width) / 2;
-          const y = box.yCenter * canvasElement.height - (box.height * canvasElement.height) / 2;
+          const x =
+            box.xCenter * canvasElement.width -
+            (box.width * canvasElement.width) / 2;
+          const y =
+            box.yCenter * canvasElement.height -
+            (box.height * canvasElement.height) / 2;
           const width = box.width * canvasElement.width;
           const height = box.height * canvasElement.height;
 
           // Draw rectangle
-          canvasCtx.strokeStyle = 'blue';
+          canvasCtx.strokeStyle = "blue";
           canvasCtx.lineWidth = 4;
           canvasCtx.strokeRect(x, y, width, height);
 
           // Crop and resize face for model
-          let tmpCanvas = document.createElement('canvas');
+          let tmpCanvas = document.createElement("canvas");
           tmpCanvas.width = 48;
           tmpCanvas.height = 48;
-          let tmpCtx = tmpCanvas.getContext('2d');
+          let tmpCtx = tmpCanvas.getContext("2d");
           tmpCtx.drawImage(
             canvasElement,
-            x, y, width, height, // source rect
-            0, 0, 48, 48         // dest rect
+            x,
+            y,
+            width,
+            height, // source rect
+            0,
+            0,
+            48,
+            48 // dest rect
           );
 
           // Get grayscale data for model
           let imgDataGray = tmpCtx.getImageData(0, 0, 48, 48);
           const grayPixels = [];
           for (let i = 0; i < imgDataGray.data.length; i += 4) {
-            let avg = (imgDataGray.data[i] + imgDataGray.data[i + 1] + imgDataGray.data[i + 2]) / 3;
+            let avg =
+              (imgDataGray.data[i] +
+                imgDataGray.data[i + 1] +
+                imgDataGray.data[i + 2]) /
+              3;
             grayPixels.push(avg);
           }
 
           // Predict emotion
           const outputTensor = tf.tidy(() => {
-            let img = tf.tensor(grayPixels, [48, 48, 1]);
-            img = tf.expandDims(img, 0); // [1, 48, 48, 1]
-            img = tf.div(img, 255.0);
+            // Transform the image data into Array pixels.
+            let img = tf.browser.fromPixels(canvasRoi);
+
+            // Resize, normalize, expand dimensions of image pixels by 0 axis.:
+            img = tf.image.resizeBilinear(img, [48, 48]);
+            img = tf.div(tf.expandDims(img, 0), 255);
             return tfliteModel.predict(img).arraySync();
           });
 
@@ -119,13 +142,13 @@ function openCvReady() {
     const faceDetection = new FaceDetection({
       locateFile: (file) => {
         return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
-      }
+      },
     });
 
     faceDetection.setOptions({
       selfieMode: true,
-      model: 'short',
-      minDetectionConfidence: 0.1
+      model: "short",
+      minDetectionConfidence: 0.1,
     });
 
     faceDetection.onResults(onResults);
@@ -135,9 +158,9 @@ function openCvReady() {
         await faceDetection.send({ image: videoElement });
       },
       width: 854,
-      height: 480
+      height: 480,
     });
-
     camera.start();
   };
+  cv.onRuntimeInitialized();
 }
